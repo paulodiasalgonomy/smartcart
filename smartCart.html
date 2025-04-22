@@ -107,7 +107,7 @@
 
       html += `<div class="relative"><div class="overflow-hidden"><div class="carousel-track" id="carousel-track">`;
       placement.items.forEach(item => {
-        html += `<div class="carousel-item"><a href="${item.linkURL}" class="block text-center"><img src="${item.imageURL}" alt="${item.name}"><p class="mt-2 text-sm font-medium">${item.name}</p></a></div>`;
+        html += `<div class="carousel-item"><a href="${item.linkURL}" class="block text-center"><img src="${item.imageURL}" alt="${item.name}"><p class="mt-2 text-sm font-medium">${item.name}</p><p class="mt-2 text-sm font-small"><strong>R$ ${item.price}</strong></p></a></div>`;
       });
       html += `</div></div><div class="flex justify-center gap-4 mt-4"><button onclick="slideCarousel(-1)" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded">◀</button><button onclick="slideCarousel(1)" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded">▶</button></div></div>`;
 
