@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Cart - Algonomy Demo</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    .carousel-track {
+      display: flex;
+      transition: transform 0.3s ease-in-out;
+    }
+    .carousel-item {
+      flex: 0 0 20%;
+      padding: 1rem;
+      box-sizing: border-box;
+    }
+    .carousel-item img {
+      width: 100%;
+      border-radius: 0.5rem;
+    }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+  <!-- Caixa flutuante para atualizar valor do carrinho -->
+  <div class="fixed top-4 right-4 z-10 bg-white p-4 shadow-lg rounded">
+    <input id="cartValueInput" type="number" step="0.01" class="border rounded p-2 mb-2 w-32" placeholder="Valor do carrinho" />
+    <button id="updateCartValue" class="bg-blue-500 text-white p-2 rounded w-full">Atualizar Carrinho</button>
+  </div>
+
+  <!-- Div onde as recomendações serão renderizadas -->
+  <div id="algonomy_recs" class="max-w-6xl mx-auto px-4 py-6 space-y-6 mt-24"></div>
+
+  <!-- Algonomy Script -->
+  <script src="https://media.algorecs.com/rrserver/js/2.0/p13n.js"></script>
+  <script defer>
+    function getCartValueFromURL() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const value = parseFloat(urlParams.get('cartValue')?.replace(',', '.') || '');
+      return !isNaN(value) ? value : 99.99;
+    }
+
+    const cartParam = getCartValueFromURL();
+
+    window.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('cartValueInput').value = cartParam.toFixed(2);
+    });
+
+    document.getElementById('updateCartValue').addEventListener('click', () => {
+      const val = parseFloat(document.getElementById('cartValueInput').value.replace(',', '.'));
+      if (!isNaN(val)) {
+        const params = new URLSearchParams(window.location.search);
+        params.set('cartValue', val.toFixed(2));
+        window.location.search = params.toString();
+      }
+    });
+
+    var R3_COMMON = new r3_common();
+    window.R3_COMMON.setApiKey('c85912f892c73e30');
+    window.R3_COMMON.apiClientKey = 'bfeefc31b6207346';
+    window.R3_COMMON.setBaseUrl('https://integration.algorecs.com/rrserver/');
+    window.R3_COMMON.setSessionId('$SESSION_ID_VARIABLE$');
+    window.R3_COMMON.setUserId('$USER_ID_VARIABLE$');
+    window.R3_COMMON.addPlacementType('cart_page.smart_cart');
+    window.R3_COMMON.setCartValue(Math.round(cartParam * 100));
+    var R3_CART = new r3_cart();
+    rr_flush_onload();
+    r3();
+
+    RR.jsonCallback = function () {
+      const placement = RR.data.JSON.placements[0];
+      if (!placement || !placement.items) return;
+
+      const toFloat = v => parseFloat(String(v).replace(',', '.')) || 0;
+
+      const cartValue = toFloat(placement.content?.cartValue || placement.cartValue);
+      const cartDelta = toFloat(placement.content?.cartValueDelta || placement.cartValueDelta);
+      const goal = cartValue + cartDelta;
+      const percent = goal > 0 ? Math.min(100, (cartValue / goal) * 100) : 0;
+      const free = cartDelta <= 0.005;
+      const barColor = percent >= 70 ? 'bg-green-500' : percent >= 31 ? 'bg-yellow-400' : 'bg-red-500';
+
+      let html = '';
+
+      if (placement.content?.imgURL) {
+        html += `<div><img src="${placement.content.imgURL}" alt="Banner" class="w-full rounded-xl shadow-md mb-4"></div>`;
+      }
+
+      html += `
+        <div class="bg-white rounded-xl shadow p-4">
+          <div class="mb-2 text-center font-medium">
+            ${!free
+              ? `Faltam <span class="text-red-600 font-semibold">${cartDelta.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span> para frete grátis!`
+              : `<span class="text-green-600 font-semibold">Parabéns! Você ganhou frete grátis! 🎉</span>`}
+          </div>
+          <div class="w-full h-4 bg-gray-200 rounded-full overflow-hidden">
+            <div class="h-full ${barColor} transition-all duration-500" style="width: ${percent}%"></div>
+          </div>
+          <div class="text-sm text-center mt-1">${percent.toFixed(1)}% da meta atingido</div>
+        </div>`;
+
+      html += `<h2 class="text-2xl font-bold text-center mt-6 mb-4">${placement.message}</h2>`;
+
+      html += `<div class="relative"><div class="overflow-hidden"><div class="carousel-track" id="carousel-track">`;
+      placement.items.forEach(item => {
+        html += `<div class="carousel-item"><a href="${item.linkURL}" class="block text-center"><img src="${item.imageURL}" alt="${item.name}"><p class="mt-2 text-sm font-medium">${item.name}</p></a></div>`;
+      });
+      html += `</div></div><div class="flex justify-center gap-4 mt-4"><button onclick="slideCarousel(-1)" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded">◀</button><button onclick="slideCarousel(1)" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded">▶</button></div></div>`;
+
+      document.getElementById('algonomy_recs').innerHTML = html;
+    };
+
+    let currentSlide = 0;
+    function slideCarousel(dir) {
+      const track = document.getElementById('carousel-track');
+      const items = track.children.length;
+      const max = Math.ceil(items / 5) - 1;
+      currentSlide = Math.max(0, Math.min(currentSlide + dir, max));
+      const w = track.children[0].offsetWidth;
+      track.style.transform = `translateX(-${currentSlide * w * 5}px)`;
+    }
+  </script>
+</body>
+</html>
