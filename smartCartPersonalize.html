@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Cart - Personalize API</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .carousel-track {
+      display: flex;
+      transition: transform 0.3s ease-in-out;
+    }
+    .carousel-item {
+      flex: 0 0 20%;
+      padding: 1rem;
+      box-sizing: border-box;
+    }
+    .carousel-item img {
+      width: 100%;
+      border-radius: 0.5rem;
+    }
+    button {
+      max-width: 100px;
+    }
+    #cartvalue {
+      display: flex;
+      align-items: flex-end;
+    }
+    #updateCartValue {
+      margin-left: 5px;
+    }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+  <div id="cartvalue" class="fixed top-4 right-4 z-10 bg-white p-4 shadow-lg rounded">
+    <input id="cartValueInput" type="number" step="0.01" class="border rounded p-2 mb-2 w-32" placeholder="Valor do carrinho" />
+    <button id="updateCartValue" class="bg-blue-500 text-white p-2 rounded w-full">Atualizar Carrinho</button>
+  </div>
+  <div id="algonomy_recs" class="max-w-6xl mx-auto px-4 py-6 space-y-6 mt-24"></div>
+
+  <script defer>
+    function getCartValueFromURL() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const value = parseFloat(urlParams.get('cartValue')?.replace(',', '.') || '');
+      return !isNaN(value) ? value : 99.99;
+    }
+
+    const cartParam = getCartValueFromURL();
+    window.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('cartValueInput').value = cartParam.toFixed(2);
+    });
+
+    document.getElementById('updateCartValue').addEventListener('click', () => {
+      const val = parseFloat(document.getElementById('cartValueInput').value.replace(',', '.'));
+      if (!isNaN(val)) {
+        const params = new URLSearchParams(window.location.search);
+        params.set('cartValue', val.toFixed(2));
+        window.location.search = params.toString();
+      }
+    });
+
+    const API_URL = `https://integration.richrelevance.com/rrserver/api/personalize?apiKey=c85912f892c73e30&apiClientKey=eac9cfa39420d536&sessionId=algtestsession941202390300&userId=algtestuser534087907238&placements=cart_page.smart_cart&cv=${Math.round(cartParam * 100)}`;
+
+    fetch(API_URL)
+      .then(res => res.text())
+      .then(html => {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+
+        const comments = Array.from(doc.childNodes).concat(...Array.from(doc.querySelectorAll('*')).map(e => Array.from(e.childNodes))).flat();
+        const comment = comments.find(node => node.nodeType === Node.COMMENT_NODE && node.nodeValue.includes('cartValue'));
+        const vars = comment?.nodeValue.match(/cartValue:(\d+\.?\d*),?\s*cartValueDelta:(\d+\.?\d*)/);
+
+        const cartValue = vars ? parseFloat(vars[1]) : 0;
+        const cartDelta = vars ? parseFloat(vars[2]) : 0;
+        const goal = cartValue + cartDelta;
+        const percent = goal > 0 ? Math.min(100, (cartValue / goal) * 100) : 0;
+        const free = cartDelta <= 0.005;
+        const barColor = percent >= 70 ? 'bg-green-500' : percent >= 31 ? 'bg-yellow-400' : 'bg-red-500';
+
+        const placementScript = doc.querySelectorAll('script');
+        let placement = null;
+        for (const script of placementScript) {
+          try {
+            const json = JSON.parse(script.textContent);
+            if (json.placements && json.placements[0]) {
+              placement = json.placements[0];
+              break;
+            }
+          } catch (e) {}
+        }
+
+        if (!placement) {
+          console.error('JSON de recomendações não encontrado.');
+          return;
+        }
+
+        const items = placement.recommendedProducts || [];
+        const message = placement.message || 'Recomendações para você';
+        const bannerCreative = (placement.creatives || []).find(c => c.imgURL);
+        const banner = bannerCreative?.imgURL;
+
+        let htmlContent = '';
+        if (banner) {
+          htmlContent += `<div><img src="${banner}" alt="Banner" class="w-full rounded-xl shadow-md mb-4"></div>`;
+        }
+
+        htmlContent += `
+          <div class="bg-white rounded-xl shadow p-4">
+            <div class="mb-2 text-center font-medium">
+              ${!free
+                ? `Faltam <span class="text-red-600 font-semibold">${cartDelta.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span> para frete grátis!`
+                : `<span class="text-green-600 font-semibold">Parabéns! Você ganhou frete grátis! 🎉</span>`}
+            </div>
+            <div class="w-full h-4 bg-gray-200 rounded-full overflow-hidden">
+              <div class="h-full ${barColor} transition-all duration-500" style="width: ${percent}%"></div>
+            </div>
+          </div>`;
+
+        htmlContent += `<h2 class="text-2xl font-bold text-center mt-6 mb-4">${message}</h2>`;
+        htmlContent += `<div class="relative"><div class="overflow-hidden"><div class="carousel-track" id="carousel-track">`;
+
+        items.forEach(item => {
+          htmlContent += `<div class="carousel-item">
+            <a href="${item.linkURL}" class="block text-center">
+              <img src="${item.imageURL}" alt="${item.name}">
+              <p class="mt-2 text-sm font-medium">${item.name}</p>
+              <p class="mt-2 text-sm font-small"><strong>R$ ${item.price}</strong></p>
+            </a>
+          </div>`;
+        });
+
+        htmlContent += `</div></div><div class="flex justify-center gap-4 mt-4">
+          <button onclick="slideCarousel(-1)" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded">◀</button>
+          <button onclick="slideCarousel(1)" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded">▶</button>
+        </div></div>`;
+
+        document.getElementById('algonomy_recs').innerHTML = htmlContent;
+      })
+      .catch(error => {
+        console.error('Erro ao buscar a API Personalize:', error);
+      });
+
+    let currentSlide = 0;
+    function slideCarousel(dir) {
+      const track = document.getElementById('carousel-track');
+      const items = track.children.length;
+      const max = Math.ceil(items / 5) - 1;
+      currentSlide = Math.max(0, Math.min(currentSlide + dir, max));
+      const w = track.children[0].offsetWidth;
+      track.style.transform = `translateX(-${currentSlide * w * 5}px)`;
+    }
+  </script>
+</body>
+</html>
